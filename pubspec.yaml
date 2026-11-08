@@ -1,0 +1,27 @@
+name: app
+description: روت الإيموجي — مدير موديل خط iOS Emoji للأجهزة المفعّل عليها Root (يعمل بالكامل دون إنترنت)
+publish_to: "none"
+version: 2.0.0+20
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.0.0
+  url_launcher: ^6.3.2
+  file_picker: ^13.1.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - ios_emoji.zip
+  fonts:
+    - family: Tajawal
+      fonts:
+        - asset: Tajawal-Regular.ttf
+        - asset: Tajawal-Bold.ttf
+          weight: 700
+        - asset: Tajawal-ExtraBold.ttf
+          weight: 800
