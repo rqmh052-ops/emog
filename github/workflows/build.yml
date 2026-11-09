@@ -1,0 +1,108 @@
+name: Build Emoji Root APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      # لتوليد أيقونة التطبيق من icon.png
+      - name: Install icon tools
+        run: python -m pip install pillow
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # نفس إصدار بيان المجرَّب؛ لا تغيّره إلا عند الحاجة.
+          flutter-version: "3.47.4"
+          cache: true
+
+      - name: Validate project files
+        run: |
+          python -m py_compile prepare_android.py
+          unzip -p ios_emoji.zip module.prop | grep -q '^id=iOS26.4Unicode17'
+          test -s Tajawal-Regular.ttf
+          test -s MainActivity.kt
+          test -s RootUtils.kt
+
+      # كل الملفات في الجذر؛ هنا نولّد هيكل أندرويد ونضع ملفات Dart داخل lib/
+      - name: Generate Android shell
+        run: |
+          cp pubspec.yaml /tmp/emoji_pubspec.yaml
+          flutter create . --platforms=android --project-name app --org com.bayan
+          cp /tmp/emoji_pubspec.yaml pubspec.yaml
+          rm -rf test lib
+          mkdir lib
+          mv ./*.dart lib/
+          printf 'analyzer:\n  exclude:\n    - build/**\n    - test/**\n' > analysis_options.yaml
+
+      - name: Prepare stable signing key
+        env:
+          EMOJI_KEYSTORE_BASE64: ${{ secrets.EMOJI_KEYSTORE_BASE64 }}
+          EMOJI_KEYSTORE_PASSWORD: ${{ secrets.EMOJI_KEYSTORE_PASSWORD }}
+          EMOJI_KEY_ALIAS: ${{ secrets.EMOJI_KEY_ALIAS }}
+        run: |
+          if [ -n "$EMOJI_KEYSTORE_BASE64" ] && [ -n "$EMOJI_KEYSTORE_PASSWORD" ]; then
+            printf '%s' "$EMOJI_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/emoji-release.jks"
+            echo "EMOJI_KEYSTORE_PATH=$RUNNER_TEMP/emoji-release.jks" >> "$GITHUB_ENV"
+            echo "EMOJI_KEYSTORE_PASSWORD=$EMOJI_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "EMOJI_KEY_ALIAS=${EMOJI_KEY_ALIAS:-emoji}" >> "$GITHUB_ENV"
+            echo "Stable signing key configured."
+          else
+            echo "No signing secrets: this APK is signed with a temporary debug key (updates over a previous build will need uninstall first)."
+          fi
+
+      - name: Configure Android project
+        run: python prepare_android.py
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart
+        run: flutter analyze --no-fatal-infos
+
+      - name: Build arm64 release APK
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: emoji-root-arm64
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      # يفشل الـ job (بعد رفع الـ APK) إن ظهرت صلاحية INTERNET بالخطأ.
+      - name: Verify APK is offline
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          ls -lh "$APK"
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          "$AAPT" dump permissions "$APK" | tee /tmp/perms.txt
+          if grep -qi 'INTERNET' /tmp/perms.txt; then
+            echo "INTERNET permission found - app is not fully offline"
+            exit 1
+          fi
