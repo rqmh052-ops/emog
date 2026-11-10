@@ -7,13 +7,11 @@ class SoftReboot {
     final approved = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text(S.softReboot),
-            content: const Text(
-              'سيتم إغلاق واجهة Android وإعادة تشغيلها.\nهذا ليس إعادة تشغيل كاملة للهاتف.\nقد تتوقف التطبيقات المفتوحة مؤقتاً.',
-            ),
+            title: Text(S.softReboot),
+            content: Text(S.softRebootBody),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text(S.cancel)),
-              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text(S.confirm)),
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(S.cancel)),
+              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(S.confirm)),
             ],
           ),
         ) ??

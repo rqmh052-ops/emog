@@ -1,7 +1,7 @@
 name: app
 description: روت الإيموجي — مدير موديل خط iOS Emoji للأجهزة المفعّل عليها Root (يعمل بالكامل دون إنترنت)
 publish_to: "none"
-version: 2.0.0+20
+version: 2.1.0+21
 
 environment:
   sdk: ^3.11.0

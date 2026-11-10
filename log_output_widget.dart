@@ -1,5 +1,14 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'strings.dart';
 import 'theme.dart';
+
+/// ينسخ كل أسطر السجل إلى الحافظة ويعرض رسالة تأكيد (مشتركة بين الرئيسية وشاشة السجل).
+Future<void> copyLogs(BuildContext context, List<String> logs) async {
+  final messenger = ScaffoldMessenger.of(context);
+  await Clipboard.setData(ClipboardData(text: logs.join('\n')));
+  messenger.showSnackBar(SnackBar(content: Text(S.logCopied)));
+}
 
 Color logColor(String line) {
   if (line.contains('✅')) return AppTheme.appSuccess;
@@ -28,7 +37,7 @@ class LogOutputWidget extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(12),
       child: visible.isEmpty
-          ? const Center(child: Text('لا توجد رسائل بعد', style: TextStyle(color: AppTheme.appDim)))
+          ? Center(child: Text(S.noLogs, style: const TextStyle(color: AppTheme.appDim)))
           : ListView.builder(
               reverse: true,
               itemCount: visible.length,

@@ -43,7 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(title),
             content: Text(body),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text(S.cancel)),
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(S.cancel)),
               FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(action)),
             ],
           ),
@@ -60,11 +60,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _setAllModules(bool disabled) async {
     final accepted = await _ask(
-      'تحذير',
-      disabled
-          ? 'سيتم تعطيل جميع موديلات مدير Root، بما فيها موديل خط الإيموجي. استخدم هذا الخيار للطوارئ فقط.\n\n${S.bootLoopTip}'
-          : 'سيتم إعادة تفعيل جميع الموديلات. قد تعود المشكلة التي تسببت في حلقة الإقلاع.',
-      disabled ? 'تعطيل' : 'تفعيل',
+      S.warningTitle,
+      disabled ? '${S.disableAllBody}\n\n${S.bootLoopTip}' : S.enableAllBody,
+      disabled ? S.disable : S.enable,
     );
     if (!accepted || !await _ensureRoot()) return;
     setState(() => _busy = true);
@@ -73,36 +71,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final success = result['success'] == true;
       if (success) {
         await AppSettings.instance.setDisableModules(disabled);
-        _root.addLog(disabled ? '⚠️ تم تعطيل جميع الموديلات (أعد التشغيل)' : '✅ تم إعادة تفعيل الموديلات (أعد التشغيل)');
+        _root.addLog(disabled ? S.modulesDisabledLog : S.modulesEnabledLog);
       } else {
-        _root.addLog('❌ ${(result['output'] ?? 'تعذر تنفيذ العملية')}');
+        _root.addLog('❌ ${(result['output'] ?? S.opFailedLog)}');
       }
-      _toast(success ? 'تم تنفيذ الأمر' : 'فشلت العملية');
+      _toast(success ? S.commandDone : S.operationFailed);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _removeFont() async {
-    final accepted = await _ask(
-      'إزالة موديل الخط',
-      'سيتم إرسال أمر إزالة موديل iOS Emoji إلى مدير Root. تحتاج إلى إعادة تشغيل الجهاز لإزالة جميع آثاره.',
-      S.remove,
-    );
+  Future<void> _removeModule() async {
+    final accepted = await _ask(S.removeModuleTitle, S.removeModuleBody, S.removeModule);
     if (!accepted || !await _ensureRoot()) return;
     final ok = await _root.removeFont();
-    _toast(ok ? 'تم إرسال طلب الإزالة' : (_root.errorMessage ?? 'فشلت الإزالة'));
+    _toast(ok ? S.removeRequestSent : (_root.errorMessage ?? S.removeFailed));
   }
 
-  Future<void> _resetImported() async {
-    final accepted = await _ask(
-      'حذف الخط المستورد',
-      'سيعود التطبيق إلى استخدام الموديل المرفق. الموديل المثبّت حالياً في الجهاز لا يتأثر.',
-      'حذف',
-    );
+  Future<void> _attachFont() async {
+    final message = await _root.importFont();
+    if (message != null) _toast(message);
+  }
+
+  Future<void> _removeAttached() async {
+    final accepted = await _ask(S.removeFontTitle, S.removeFontBody, S.delete);
     if (!accepted) return;
     await _root.resetImportedFont();
-    _toast('تم حذف الخط المستورد');
+    _toast(S.fontRemoved);
   }
 
   Widget _title(String text) => Padding(
@@ -114,16 +109,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = AppSettings.instance;
+    final fontLine = _root.fontReady
+        ? '${S.fontAttached} (${formatBytes(_root.fontBytes)})'
+        : S.fontNotAttached;
     return Scaffold(
-      appBar: AppBar(title: const Text(S.settings)),
+      appBar: AppBar(title: Text(S.settings)),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         _title(S.rootSection),
         ValueListenableBuilder<bool>(
           valueListenable: settings.autoSoftReboot,
           builder: (context, value, _) => SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text(S.autoSoftReboot),
-            subtitle: const Text(S.autoSoftRebootSubtitle),
+            title: Text(S.autoSoftReboot),
+            subtitle: Text(S.autoSoftRebootSub),
             value: value,
             onChanged: settings.setAutoSoftReboot,
           ),
@@ -133,15 +131,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           valueListenable: settings.disableModules,
           builder: (context, value, _) => SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text(S.disableModules),
-            subtitle: const Text(S.disableModulesSubtitle),
+            title: Text(S.disableModules),
+            subtitle: Text(S.disableModulesSub),
             value: value,
             onChanged: _busy ? null : _setAllModules,
           ),
         ),
-        const AppCard(
-          padding: EdgeInsets.all(12),
-          child: Text(S.bootLoopTip, style: TextStyle(color: AppTheme.appWarning, height: 1.5)),
+        AppCard(
+          padding: const EdgeInsets.all(12),
+          child: Text(S.bootLoopTip, style: const TextStyle(color: AppTheme.appWarning, height: 1.5)),
         ),
         const SizedBox(height: 22),
         _title(S.fontSection),
@@ -150,41 +148,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Column(children: [
             ListTile(
               leading: const Icon(Icons.emoji_emotions_outlined, color: AppTheme.appPrimary),
-              title: const Text(S.fontTitle),
-              subtitle: Text(
-                'iOS 26.4 / Unicode 17  |  ${_root.fontInstalled ? S.fontInstalled : S.fontNotInstalled}\n'
-                '${_root.customFont ? 'ملف مستورد' : 'الموديل المرفق'}  |  ${formatBytes(_root.fontBytes)}',
-              ),
-              isThreeLine: true,
-              trailing: _root.fontInstalled
-                  ? TextButton(
-                      onPressed: _busy ? null : _removeFont,
-                      child: const Text(S.remove, style: TextStyle(color: AppTheme.appError)),
-                    )
-                  : null,
+              title: Text(fontLine),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.attach_file_rounded, color: AppTheme.appPrimary),
+              title: Text(_root.fontReady ? S.changeFont : S.attachFont),
+              onTap: _busy || _root.busy ? null : _attachFont,
             ),
             if (_root.customFont) ...[
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.restore_rounded, color: AppTheme.appMuted),
-                title: const Text('حذف الخط المستورد'),
-                onTap: _busy ? null : _resetImported,
+                title: Text(S.removeFont),
+                onTap: _busy || _root.busy ? null : _removeAttached,
               ),
             ],
-          ]),
-        ),
-        const SizedBox(height: 22),
-        _title(S.aboutSection),
-        const AppCard(
-          padding: EdgeInsets.zero,
-          child: Column(children: [
-            ListTile(title: Text('الإصدار'), trailing: Text(S.appVersion)),
-            Divider(height: 1),
-            ListTile(title: Text('طريقة Root'), subtitle: Text('طلب صلاحية من المدير المثبت فقط')),
-            Divider(height: 1),
-            ListTile(title: Text('مدير الوحدات'), subtitle: Text('KernelSU أو APatch أو Magisk عند توفر أمره')),
-            Divider(height: 1),
-            ListTile(title: Text('الاتصال بالإنترنت'), subtitle: Text('لا يوجد: التطبيق بلا صلاحية INTERNET')),
+            if (_root.fontInstalled) ...[
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: AppTheme.appError),
+                title: Text(S.removeModule, style: const TextStyle(color: AppTheme.appError)),
+                onTap: _busy || _root.busy ? null : _removeModule,
+              ),
+            ],
           ]),
         ),
         const SizedBox(height: 12),

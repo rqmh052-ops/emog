@@ -1,23 +1,101 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'app_settings.dart';
 import 'log_screen.dart';
+import 'logo.dart';
 import 'page_transitions.dart';
+import 'root_controller.dart';
 import 'settings_screen.dart';
 import 'strings.dart';
 import 'theme.dart';
 
-class SideDrawer extends StatelessWidget {
-  const SideDrawer({super.key, required this.onPermissions});
-  final VoidCallback onPermissions;
+final Uint8List _bynuxLogo = base64Decode(kAppLogoBase64);
+final Uint8List _bayanLogo = base64Decode(kLogoBase64);
+final Uint8List _flagAr = base64Decode(kFlagArBase64);
+final Uint8List _flagEn = base64Decode(kFlagEnBase64);
 
-  static const _bynux = 'https://t.me/Bynux_777';
-  static const _bayan = 'https://t.me/Bayan_x777';
+BoxDecoration _box(Color color) => BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppTheme.appBorderHigh),
+    );
 
-  Future<void> _open(String value) async {
-    try {
-      await launchUrl(Uri.parse(value), mode: LaunchMode.externalApplication);
-    } catch (_) {}
+Future<void> _open(String value) async {
+  try {
+    await launchUrl(Uri.parse(value), mode: LaunchMode.externalApplication);
+  } catch (_) {}
+}
+
+/// تأثير ضغط خفيف (تصغير) كما في قائمة بيان.
+class _PressFx extends StatefulWidget {
+  const _PressFx({required this.child});
+  final Widget child;
+  @override
+  State<_PressFx> createState() => _PressFxState();
+}
+
+class _PressFxState extends State<_PressFx> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (_down != v && mounted) setState(() => _down = v);
   }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+        onPointerDown: (_) => _set(true),
+        onPointerUp: (_) => _set(false),
+        onPointerCancel: (_) => _set(false),
+        child: AnimatedScale(
+          scale: _down ? 0.97 : 1.0,
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOut,
+          child: widget.child,
+        ),
+      );
+}
+
+/// زر بحد بلون أساسي (نفس زر بيان).
+class _OButton extends StatelessWidget {
+  const _OButton({required this.label, required this.icon, required this.onPressed});
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => _PressFx(
+        child: SizedBox(
+          height: 44,
+          child: OutlinedButton(
+            onPressed: onPressed,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.appPrimary,
+              backgroundColor: AppTheme.appPrimary.withValues(alpha: .08),
+              side: const BorderSide(color: AppTheme.appPrimary),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 6),
+              Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+            ]),
+          ),
+        ),
+      );
+}
+
+class SideDrawer extends StatelessWidget {
+  const SideDrawer({
+    super.key,
+    required this.onPhoneInfo,
+    required this.onPermissions,
+    required this.onOpenSources,
+  });
+  final VoidCallback onPhoneInfo, onPermissions, onOpenSources;
 
   Widget _nav(IconData icon, String label, bool active, VoidCallback action) {
     return Material(
@@ -45,12 +123,116 @@ class SideDrawer extends StatelessWidget {
     );
   }
 
-  Widget _channel(IconData icon, String label, String url) {
-    return OutlinedButton.icon(
-      onPressed: () => _open(url),
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+  Widget _link(IconData icon, String label, String url) =>
+      Expanded(child: _OButton(label: label, icon: icon, onPressed: () => _open(url)));
+
+  // صف واحد في لوحة اللغة: العلم الدائري ثم فاصل عمودي ثم اسم اللغة.
+  Widget _langRow(BuildContext context, {
+    required String code,
+    required Uint8List flagBytes,
+    required String label,
+    required bool selected,
+  }) {
+    const accent = AppTheme.appPrimary;
+    return Material(
+      color: selected ? accent.withValues(alpha: .15) : Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          if (S.englishIsLtr) Navigator.pop(context);
+          AppSettings.instance.setLanguage(code);
+        },
+        child: SizedBox(
+          height: 44,
+          child: Row(children: [
+            SizedBox(
+              width: 54,
+              child: Center(
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? accent : AppTheme.appBorderHigh,
+                      width: selected ? 1.8 : 1.0,
+                    ),
+                    boxShadow: selected ? [BoxShadow(color: accent.withValues(alpha: .35), blurRadius: 8)] : null,
+                  ),
+                  child: ClipOval(
+                    child: Image.memory(flagBytes, width: 28, height: 28, fit: BoxFit.cover, gaplessPlayback: true),
+                  ),
+                ),
+              ),
+            ),
+            Container(width: 1, height: 44, color: selected ? accent.withValues(alpha: .35) : AppTheme.appBorder),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                    color: selected ? accent : AppTheme.appText,
+                    fontSize: 14.5,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  )),
+            ),
+            if (selected)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Icon(Icons.check_circle_rounded, color: accent, size: 18),
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _languagePanel(BuildContext context) {
+    final current = AppSettings.instance.language.value;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        child: Row(children: [
+          const Icon(Icons.language_outlined, color: AppTheme.appMuted, size: 20),
+          const SizedBox(width: 12),
+          Text(S.language,
+              style: const TextStyle(color: AppTheme.appText, fontSize: 15, fontWeight: FontWeight.w700)),
+        ]),
+      ),
+      Container(
+        decoration: _box(AppTheme.appBackground),
+        clipBehavior: Clip.antiAlias,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _langRow(context, code: 'ar', flagBytes: _flagAr, label: S.langArabic, selected: current != 'en'),
+          Container(height: 1, color: AppTheme.appBorder),
+          _langRow(context, code: 'en', flagBytes: _flagEn, label: S.langEnglish, selected: current == 'en'),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _channelCard({
+    required Uint8List logo,
+    required String title,
+    required String subtitle,
+    required List<Widget> buttons,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _box(AppTheme.appBackground),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          ClipOval(child: Image.memory(logo, width: 52, height: 52, fit: BoxFit.cover, gaplessPlayback: true)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.appMuted)),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: buttons),
+      ]),
     );
   }
 
@@ -64,73 +246,67 @@ class SideDrawer extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 28, 16, 16),
             child: SingleChildScrollView(
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                      colors: [Color(0xFF244C91), AppTheme.appSurface],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppTheme.appBorderHigh),
-                  ),
-                  child: const Row(children: [
-                    CircleAvatar(
-                      radius: 25,
-                      backgroundColor: Color(0x334D8BFF),
-                      child: Icon(Icons.emoji_emotions_outlined, color: AppTheme.appText, size: 27),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(S.appName, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                        SizedBox(height: 3),
-                        Text('الإصدار ${S.appVersion}', style: TextStyle(fontSize: 12, color: AppTheme.appMuted)),
-                      ]),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(S.appName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text('${S.version} ${S.appVersion}',
+                        style: const TextStyle(fontSize: 12, color: AppTheme.appMuted)),
                   ]),
                 ),
-                const SizedBox(height: 16),
                 _nav(Icons.home_outlined, S.home, true, () => Navigator.pop(context)),
                 const SizedBox(height: 4),
                 _nav(Icons.settings_outlined, S.settings, false, () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(SmoothPageRoute<void>(builder: (_) => const SettingsScreen()));
+                  final nav = Navigator.of(context);
+                  nav.pop();
+                  nav
+                      .push(SmoothPageRoute<void>(builder: (_) => const SettingsScreen()))
+                      .then((_) => RootController.instance.refreshFontInfo());
                 }),
                 const SizedBox(height: 4),
                 _nav(Icons.receipt_long_outlined, S.logs, false, () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(SmoothPageRoute<void>(builder: (_) => const LogScreen()));
+                  final nav = Navigator.of(context);
+                  nav.pop();
+                  nav.push(SmoothPageRoute<void>(builder: (_) => const LogScreen()));
                 }),
-                const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider()),
-                _nav(Icons.admin_panel_settings_outlined, S.permissions, false, () {
+                const SizedBox(height: 4),
+                _nav(Icons.phone_android_outlined, S.phoneInfo, false, () {
+                  Navigator.pop(context);
+                  onPhoneInfo();
+                }),
+                const SizedBox(height: 4),
+                _nav(Icons.verified_user_outlined, S.permissionsCheck, false, () {
                   Navigator.pop(context);
                   onPermissions();
                 }),
-                const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider()),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(4, 0, 4, 10),
-                  child: Text('قنوات Telegram',
-                      style: TextStyle(color: AppTheme.appMuted, fontSize: 13, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                _languagePanel(context),
+                const SizedBox(height: 20),
+                _channelCard(
+                  logo: _bynuxLogo,
+                  title: S.bynuxName,
+                  subtitle: S.updatesChannel,
+                  buttons: [_link(Icons.send_outlined, S.telegram, S.bynuxUrl)],
                 ),
-                _channel(Icons.send_rounded, 'قناة بينكس', _bynux),
-                const SizedBox(height: 8),
-                _channel(Icons.campaign_outlined, 'قناة بيان', _bayan),
-                const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider()),
-                _nav(Icons.info_outline, S.openSource, false, () {
-                  showAboutDialog(
-                    context: context,
-                    applicationName: S.appName,
-                    applicationVersion: S.appVersion,
-                    children: const [
-                      Text('إدارة موديل الخط تعتمد على مدير Root الموجود مسبقاً مثل KernelSU أو Magisk أو APatch.'),
-                      SizedBox(height: 8),
-                      Text('مصدر KernelSU: github.com/tiann/KernelSU'),
-                      Text('موديل الخط: iOS 26.4 / Unicode 17 (zFont)، وسكربتاته مبنية على killgmsfont.'),
-                      Text('لا يتضمن هذا التطبيق أي أداة تفعيل Root أو استغلال ثغرات.'),
-                    ],
-                  );
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 24, 4, 8),
+                  child: Text(S.aboutApp, style: const TextStyle(fontSize: 13, color: AppTheme.appMuted)),
+                ),
+                _channelCard(
+                  logo: _bayanLogo,
+                  title: S.bayanName,
+                  subtitle: S.bayanTagline,
+                  buttons: [
+                    _link(Icons.smart_display_outlined, S.youtube, S.youtubeUrl),
+                    const SizedBox(width: 8),
+                    _link(Icons.send_outlined, S.telegram, S.bayanUrl),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _nav(Icons.info_outline, S.openSources, false, () {
+                  Navigator.pop(context);
+                  onOpenSources();
                 }),
               ]),
             ),

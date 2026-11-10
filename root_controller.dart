@@ -20,8 +20,9 @@ class RootController extends ChangeNotifier {
   bool busy = false;
   bool customFont = false;
   int fontBytes = -1;
-  String status = S.rootUnknown;
-  String managerName = 'غير معروف';
+  bool checkingRoot = false;
+  String status = '';
+  String managerName = '';
   String manufacturer = '—';
   String model = '—';
   String androidVersion = '—';
@@ -34,6 +35,7 @@ class RootController extends ChangeNotifier {
   bool _initialized = false;
 
   bool get fontReady => fontBytes >= minFontBytes;
+  String get managerLabel => managerName.isEmpty ? S.unknown : managerName;
 
   String _stamp() {
     final n = DateTime.now();
@@ -91,11 +93,11 @@ class RootController extends ChangeNotifier {
       androidVersion = (info['androidVersion'] ?? '—').toString();
       kernelVersion = (info['kernelVersion'] ?? '—').toString();
       final probe = await KsuManager.instance.probeRoot();
-      managerName = (probe['manager'] ?? 'غير معروف').toString();
-      _log('✅ تم تحميل معلومات الجهاز');
-      _log('ℹ️ مدير Root المحتمل: $managerName');
+      managerName = (probe['manager'] ?? '').toString();
+      _log(S.logDeviceLoaded);
+      _log(S.logManager(managerLabel));
     } catch (e) {
-      _log('⚠️ تعذر قراءة بعض معلومات الجهاز: $e');
+      _log(S.logDeviceFailed('$e'));
     }
     fontInstalled = AppSettings.instance.fontInstalled.value;
     await refreshFontInfo();
@@ -116,34 +118,36 @@ class RootController extends ChangeNotifier {
   Future<bool> requestRoot() async {
     if (busy) return false;
     busy = true;
+    checkingRoot = true;
     errorMessage = null;
-    status = 'جارٍ طلب صلاحية Root…';
-    _log('🔍 جارٍ التحقق من صلاحية Root');
+    status = S.rootChecking;
+    _log(S.logCheckingRoot);
     notifyListeners();
     try {
       final result = await KsuManager.instance.requestRoot();
       rootGranted = result['granted'] == true;
       final output = (result['output'] ?? '').toString().trim();
       if (!rootGranted) {
-        status = S.rootInactive;
+        status = S.rootMissing;
         errorMessage = output.isEmpty ? S.noRoot : output;
         _log('❌ $status');
         if (output.isNotEmpty) _log(output);
         return false;
       }
-      status = S.rootActive;
+      status = S.rootVerified;
       managerName = (result['manager'] ?? managerName).toString();
-      _log('✅ تم منح التطبيق صلاحية Root ($managerName)');
+      _log(S.logRootGranted(managerLabel));
       await refreshModuleState();
       return true;
     } catch (e) {
       rootGranted = false;
-      status = 'تعذر طلب Root';
+      status = S.statusRequestFailed;
       errorMessage = e.toString();
-      _log('❌ فشل طلب Root: $e');
+      _log(S.logRootFailed('$e'));
       return false;
     } finally {
       busy = false;
+      checkingRoot = false;
       notifyListeners();
     }
   }
@@ -155,9 +159,9 @@ class RootController extends ChangeNotifier {
     fontInstalled = result['success'] == true && output.contains(moduleId);
     hasMetamodule = managerName != 'KernelSU' || output.contains('APP_METAMODULE:');
     await AppSettings.instance.setFontInstalled(fontInstalled);
-    _log(fontInstalled ? '✅ موديل خط iPhone Emoji مثبت' : 'ℹ️ موديل خط iPhone Emoji غير مثبت');
+    _log(fontInstalled ? S.logModuleInstalled : S.logModuleNotInstalled);
     if (managerName == 'KernelSU' && !hasMetamodule) {
-      _log('⚠️ لا يوجد Metamodule في KernelSU؛ لن يُركّب مجلد system');
+      _log(S.logNoMetamodule);
     }
     notifyListeners();
   }
@@ -165,9 +169,9 @@ class RootController extends ChangeNotifier {
   Future<bool> installFont() async {
     if (!rootGranted || busy) return false;
     busy = true;
-    status = 'جارٍ تثبيت موديل الخط…';
+    status = S.statusInstalling;
     errorMessage = null;
-    _log('📦 جارٍ تجهيز موديل خط iPhone Emoji');
+    _log(S.logPreparing);
     notifyListeners();
     try {
       final path = await AssetExtractor.instance.activeModulePath();
@@ -175,23 +179,23 @@ class RootController extends ChangeNotifier {
       final success = result['success'] == true;
       final output = (result['output'] ?? '').toString().trim();
       if (!success) {
-        status = 'فشل تثبيت الموديل';
-        errorMessage = output.isEmpty ? 'تعذر تثبيت الموديل. تحقق من صلاحية Root ومدير الوحدات.' : output;
-        _log('❌ فشل تثبيت موديل الخط');
+        status = S.statusInstallFailed;
+        errorMessage = output.isEmpty ? S.installFailedMsg : output;
+        _log(S.logInstallFailed);
         if (output.isNotEmpty) _log(output);
         return false;
       }
       fontInstalled = true;
       await AppSettings.instance.setFontInstalled(true);
-      status = 'تم تثبيت الموديل';
-      _log('✅ تم تثبيت الموديل عبر مدير Root');
+      status = S.statusInstalled;
+      _log(S.logInstalled);
       if (output.isNotEmpty) _log(output);
-      _log('ℹ️ أعد تشغيل الواجهة أو الجهاز لتطبيق التغييرات');
+      _log(S.logRestartHint);
       return true;
     } catch (e) {
-      status = 'فشل تثبيت الموديل';
+      status = S.statusInstallFailed;
       errorMessage = e.toString();
-      _log('❌ خطأ أثناء تثبيت الموديل: $e');
+      _log(S.logInstallError('$e'));
       return false;
     } finally {
       busy = false;
@@ -210,16 +214,16 @@ class RootController extends ChangeNotifier {
       if (success) {
         fontInstalled = false;
         await AppSettings.instance.setFontInstalled(false);
-        _log('✅ تم إرسال طلب إزالة موديل الخط (يكتمل بعد إعادة التشغيل)');
+        _log(S.logRemoveSent);
       } else {
-        errorMessage = output.isEmpty ? 'تعذرت إزالة الموديل' : output;
-        _log('❌ فشلت إزالة موديل الخط');
+        errorMessage = output.isEmpty ? S.removeFailedMsg : output;
+        _log(S.logRemoveFailed);
         if (output.isNotEmpty) _log(output);
       }
       return success;
     } catch (e) {
       errorMessage = e.toString();
-      _log('❌ خطأ أثناء إزالة الموديل: $e');
+      _log(S.logRemoveError('$e'));
       return false;
     } finally {
       busy = false;
@@ -236,24 +240,22 @@ class RootController extends ChangeNotifier {
     try {
       final PlatformFile? picked = await FilePicker.pickFile(type: FileType.any);
       if (picked == null) return null;
-      _log('📦 جارٍ استيراد: ${picked.name}');
+      _log(S.logImporting(picked.name));
       final tmp = File(await AssetExtractor.instance.importTempPath());
       await tmp.writeAsBytes(await picked.readAsBytes(), flush: true);
       final result = await KsuManager.instance.importFont(tmp.path);
       if (await tmp.exists()) await tmp.delete();
       if (result['success'] != true) {
-        final err = (result['error'] ?? 'فشل الاستيراد').toString();
+        final err = (result['error'] ?? S.importFailed).toString();
         _log('❌ $err');
         return err;
       }
       await refreshFontInfo();
-      _log('✅ تم استيراد الخط (${formatBytes(fontBytes)})');
-      return fontInstalled
-          ? 'تم الاستيراد. أعد تثبيت الموديل ليستخدم الخط الجديد.'
-          : 'تم استيراد الخط بنجاح.';
+      _log(S.logImported(formatBytes(fontBytes)));
+      return fontInstalled ? S.importedReinstall : S.fontAttachedToast;
     } catch (e) {
-      _log('❌ فشل الاستيراد: $e');
-      return 'فشل الاستيراد: $e';
+      _log(S.logImportFailedWith('$e'));
+      return S.importFailedWith('$e');
     } finally {
       busy = false;
       notifyListeners();
@@ -263,13 +265,13 @@ class RootController extends ChangeNotifier {
   Future<void> resetImportedFont() async {
     await KsuManager.instance.deleteCustom();
     await refreshFontInfo();
-    _log('ℹ️ تم حذف الخط المستورد والرجوع للموديل المرفق');
+    _log(S.logFontRemoved);
   }
 }
 
 String formatBytes(int bytes) {
-  if (bytes < 0) return 'غير معروف';
-  if (bytes < 1024) return '$bytes بايت';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} ك.ب';
-  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} م.ب';
+  if (bytes < 0) return S.unknown;
+  if (bytes < 1024) return '$bytes ${S.unitByte}';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} ${S.unitKB}';
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} ${S.unitMB}';
 }
