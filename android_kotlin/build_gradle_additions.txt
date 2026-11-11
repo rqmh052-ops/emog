@@ -1,0 +1,25 @@
+// إضافات android/app/build.gradle المطلوبة:
+
+android {
+    // ... إعداداتك الحالية ...
+
+    defaultConfig {
+        // ...
+        ndk {
+            abiFilters "arm64-v8a"  // 64-bit فقط
+        }
+        externalNativeBuild {
+            cmake {
+                // لا حاجة لـ cppFlags إضافية
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            // ضع CMakeLists.txt في android/app/src/main/cpp/
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+}
