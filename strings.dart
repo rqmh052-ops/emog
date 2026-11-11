@@ -159,3 +159,23 @@ class S {
   static String get unitKB => _t('ك.ب');
   static String get unitMB => _t('م.ب');
 }
+
+// ── إضافات DFRoot / Exploit ──────────────────────────────────────────────
+extension ExploitStrings on S {
+  static String get aboutSection => _t('حول التطبيق');
+  static String get exploitSection => _t('تفعيل الروت الكيرنلي');
+  static String get exploitBtn => _t('تفعيل');
+  static String get exploitRetry => _t('أعد المحاولة');
+  static String get exploitRunning => _t('جارٍ تشغيل الـ Exploit...');
+  static String get exploitSuccess => _t('✅ Root نشط!');
+  static String get exploitFailed => _t('❌ فشل — اضغط للمحاولة مجدداً');
+  static String get grantRootBtn => _t('منح');
+  static String get grantRootTitle => _t('② منح Root لهذا التطبيق');
+  static String get grantRootGranted => _t('✅ الصلاحية ممنوحة');
+  static String get grantRootWaiting => _t('فعّل الروت بالخطوة ① أولاً');
+  static String get startOnBoot => _t('التشغيل عند الإقلاع');
+  static String get startOnBootSub => _t('يُعيد تفعيل الروت تلقائياً بعد كل إعادة تشغيل');
+  static String get exploitAutoSoftR => _t('إعادة تشغيل الواجهة بعد الـ Exploit');
+  static String get exploitAutoSoftRSub => _t('يُعيد تشغيل واجهة Android بعد نجاح الـ Exploit');
+  static String get aboutSection2 => _t('حول التطبيق');
+}

@@ -1,7 +1,7 @@
 name: app
-description: روت الإيموجي — مدير موديل خط iOS Emoji للأجهزة المفعّل عليها Root (يعمل بالكامل دون إنترنت)
+description: روت الإيموجي — مدير موديل خط iOS Emoji مع محرك DFRoot الكيرنلي
 publish_to: "none"
-version: 2.1.0+21
+version: 2.2.0+22
 
 environment:
   sdk: ^3.11.0
@@ -16,7 +16,20 @@ dependencies:
 flutter:
   uses-material-design: true
   assets:
+    # موديل الخط (NotoColorEmoji.ttf داخله placeholder — يُستبدل بالملف الحقيقي)
     - ios_emoji.zip
+    # ثنائيات KernelSU
+    - ksud
+    - ksuinit
+    # موديلات الكيرنل لكل KMI مدعوم
+    - kmi/android12-5.10.ko
+    - kmi/android13-5.10.ko
+    - kmi/android13-5.15.ko
+    - kmi/android14-5.15.ko
+    - kmi/android14-6.1.ko
+    - kmi/android15-6.6.ko
+    - kmi/android16-6.12.ko
+    - kmi/android17-6.18.ko
   fonts:
     - family: Tajawal
       fonts:
